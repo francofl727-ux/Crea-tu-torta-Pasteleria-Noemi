@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Armá tu torta</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="hero">
+  <div class="hero-overlay">
+    <p class="eyebrow" id="bizName">PASTELERÍA</p>
+    <h1 id="heroTitle">Tortas hechas para tus momentos especiales</h1>
+    <p id="heroSubtitle">Armá tu pedido paso a paso y recibí tu presupuesto por WhatsApp.</p>
+    <a id="igLink" href="#" target="_blank" rel="noopener" class="ig-link hidden">📷 Seguinos en Instagram</a>
+    <button class="primary" onclick="start()">🍰 ARMÁ TU TORTA</button>
+  </div>
+</header>
+
+<main id="app" class="container">
+  <section id="gallerySection" class="gallery-section">
+    <div class="section-head">
+      <p class="eyebrow">INSPIRACIÓN</p>
+      <h2>Algunas de nuestras tortas</h2>
+      <p>Elegí un diseño de referencia o contanos tu propia idea.</p>
+    </div>
+    <div id="gallery" class="gallery"></div>
+  </section>
+
+  <section id="wizard" class="wizard hidden">
+    <div class="progress"><div id="progressBar"></div></div>
+    <div id="step"></div>
+    <div class="wizard-actions">
+      <button id="backBtn" class="secondary" onclick="back()">← Atrás</button>
+      <button id="nextBtn" class="primary" onclick="next()">Continuar →</button>
+    </div>
+  </section>
+</main>
+
+<div id="toast" class="toast"></div>
+<script src="app.js"></script>
+</body>
+</html>
