@@ -8,6 +8,12 @@
 */
 const SHEET_ID = "1iQirAqmJzyW4_lKcElqDCv3F-uPx_peCIIHxyNOnK_M";
 
+// URL de tu Apps Script publicado como Aplicación web (termina en /exec).
+// Dejalo vacío ("") si todavía no lo configuraste: la página sigue funcionando igual,
+// simplemente no va a guardar copia del pedido en tu planilla admin.
+const PEDIDOS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbw86S6tnVVT5KW_BkoPqUl5-4XAmBNCzaHaeMeqbEPxNszwbMr__b-BeDOHIyzpqOH4_Q/exec";
+const STORAGE_KEY = "configuradorTortaOrder_v1";
+
 const FALLBACK_DATA = {
   CONFIGURACION:[
     ["Campo","Valor","Descripción"],
@@ -58,8 +64,42 @@ const FALLBACK_DATA = {
 
 let data = {};
 let stepIndex = 0;
-let order = { people:null, kg:null, mode:"people", design:null, designNote:"", fillings:[], fillingsExtra:"", box:null, custom:"", name:"", date:"", time:"", extra:"", sweet:[], salty:[], sweetExtra:"", saltyExtra:"" };
+function freshOrder(){
+  return { people:null, kg:null, mode:"people", design:null, designNote:"", fillings:[], fillingsExtra:"", box:null, custom:"", name:"", date:"", time:"", clientPhone:"", extra:"", sweet:[], salty:[], sweetExtra:"", saltyExtra:"" };
+}
+let order = freshOrder();
 const steps = ["size","design","fillings","box","custom","details","sweet","salty","summary"];
+
+function setField(key, value){ order[key] = value; saveProgress(); }
+
+function saveProgress(){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({ order, stepIndex })); }catch(e){}
+}
+
+function loadProgress(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return false;
+    const saved = JSON.parse(raw);
+    if(!saved || !saved.order) return false;
+    order = Object.assign(freshOrder(), saved.order);
+    stepIndex = Math.min(Math.max(saved.stepIndex || 0, 0), steps.length - 1);
+    return true;
+  }catch(e){ return false; }
+}
+
+function clearProgress(){
+  try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
+}
+
+function resetOrder(){
+  if(!confirm("¿Seguro que querés empezar de nuevo? Se va a perder el progreso actual.")) return;
+  order = freshOrder();
+  stepIndex = 0;
+  clearProgress();
+  document.getElementById("wizard").classList.add("hidden");
+  document.getElementById("gallerySection").classList.remove("hidden");
+}
 
 async function loadData(){
   data = JSON.parse(JSON.stringify(FALLBACK_DATA));
@@ -95,6 +135,15 @@ async function loadData(){
 
   applyConfig();
   renderGallery();
+  resumeIfSaved();
+}
+
+function resumeIfSaved(){
+  if(loadProgress()){
+    document.getElementById("gallerySection").classList.add("hidden");
+    document.getElementById("wizard").classList.remove("hidden");
+    renderStep();
+  }
 }
 
 function parseCSV(s){
@@ -189,12 +238,13 @@ function validate(){
   if(s=="size" && ((order.mode=="people" && !order.people) || (order.mode=="kg" && !order.kg))) return toast("Completá el tamaño.");
   if(s=="design" && !order.design) return toast("Elegí un diseño o contanos que tenés otra idea.");
   if(s=="fillings" && order.fillings.length==0) return toast("Elegí al menos un relleno o indicá que querés consultar otro.");
-  if(s=="details" && (!order.name || !order.date || !order.time)) return toast("Completá nombre, fecha y hora aproximada.");
+  if(s=="details" && (!order.name || !order.clientPhone || !order.date || !order.time)) return toast("Completá nombre, WhatsApp, fecha y hora aproximada.");
   return true;
 }
 
 function renderStep(){
   const s = steps[stepIndex], el = document.getElementById("step");
+  saveProgress();
   document.getElementById("progressBar").style.width = (stepIndex/(steps.length-1)*100) + "%";
   document.getElementById("backBtn").style.visibility = stepIndex ? "visible" : "hidden";
   document.getElementById("nextBtn").textContent = s=="summary" ? "📲 Enviar pedido por WhatsApp" : "Continuar →";
@@ -210,21 +260,21 @@ function renderStep(){
 }
 
 function sizeHTML(){
-  return `<h2 class="step-title">¿Para cuántas personas o cuántos kilos?</h2><p class="hint">Elegí una sola forma de indicar el tamaño. Te mostraremos la otra como referencia.</p><div class="choice-grid"><div class="choice ${order.mode=="people"?"selected":""}" onclick="chooseMode('people')">👥<br><b>Por personas</b></div><div class="choice ${order.mode=="kg"?"selected":""}" onclick="chooseMode('kg')">⚖️<br><b>Por kilos</b></div></div>${order.mode=="people"?`<div class="choice-grid">${[10,20,30,40,50,60,70,80,90,100].map(n=>`<div class="choice ${order.people==n?"selected":""}" onclick="order.people=${n};renderStep()">${n} personas</div>`).join("")}<div class="choice ${order.people=="other"?"selected":""}" onclick="order.people='other';renderStep()">Otra cantidad</div></div>${order.people=="other"?`<input class="input" type="number" min="1" placeholder="Cantidad de personas" onchange="order.people=+this.value">`:""}<p class="muted">💡 ${configMsg()}</p>${order.people&&order.people!="other"?`<p class="ref">Referencia aproximada: ${Math.round(order.people/10)} kg</p>`:""}`
+  return `<h2 class="step-title">¿Para cuántas personas o cuántos kilos?</h2><p class="hint">Elegí una sola forma de indicar el tamaño. Te mostraremos la otra como referencia.</p><div class="choice-grid"><div class="choice ${order.mode=="people"?"selected":""}" onclick="chooseMode('people')">👥<br><b>Por personas</b></div><div class="choice ${order.mode=="kg"?"selected":""}" onclick="chooseMode('kg')">⚖️<br><b>Por kilos</b></div></div>${order.mode=="people"?`<div class="choice-grid">${[10,20,30,40,50,60,70,80,90,100].map(n=>`<div class="choice ${order.people==n?"selected":""}" onclick="order.people=${n};renderStep()">${n} personas</div>`).join("")}<div class="choice ${order.people=="other"?"selected":""}" onclick="order.people='other';renderStep()">Otra cantidad</div></div>${order.people=="other"?`<input class="input" type="number" min="1" placeholder="Cantidad de personas" onchange="setField('people', +this.value)">`:""}<p class="muted">💡 ${configMsg()}</p>${order.people&&order.people!="other"?`<p class="ref">Referencia aproximada: ${Math.round(order.people/10)} kg</p>`:""}`
   :`<div class="choice-grid">${Array.from({length:10},(_,i)=>i+1).map(n=>`<div class="choice ${order.kg==n?"selected":""}" onclick="order.kg=${n};renderStep()">${n} kg</div>`).join("")}</div><p class="muted">💡 ${configMsg()}</p>${order.kg?`<p class="ref">Referencia aproximada: ${order.kg*10} personas</p>`:""}`}`;
 }
 
 function chooseMode(m){ order.mode=m; order.people=null; order.kg=null; renderStep(); }
 
 function designHTML(){
-  return `<h2 class="step-title">¿Qué diseño estás buscando?</h2><p class="hint">Podés elegir una torta de referencia o contarnos una idea propia.</p><div class="products">${active("DISEÑOS").map(d=>`<div class="product ${order.design?.ID==d.ID?"selected":""}" onclick='selectDesign(${j(d)})'>${d.Imagen_URL?`<img src="${esc(d.Imagen_URL)}">`:""}<b>${esc(d.Nombre)}</b><div class="tag">${esc(d.Hashtag||"")}</div></div>`).join("")}</div><div class="choice ${order.design?.custom?"selected":""}" style="margin-top:18px" onclick="selectCustomDesign()">✨ Tengo otra idea</div>${order.design?.custom?`<textarea class="textarea" placeholder="Contanos tu idea: colores, tema, referencias, etc." onchange="order.designNote=this.value">${esc(order.designNote)}</textarea>`:""}`;
+  return `<h2 class="step-title">¿Qué diseño estás buscando?</h2><p class="hint">Podés elegir una torta de referencia o contarnos una idea propia.</p><div class="products">${active("DISEÑOS").map(d=>`<div class="product ${order.design?.ID==d.ID?"selected":""}" onclick='selectDesign(${j(d)})'>${d.Imagen_URL?`<img src="${esc(d.Imagen_URL)}">`:""}<b>${esc(d.Nombre)}</b><div class="tag">${esc(d.Hashtag||"")}</div></div>`).join("")}</div><div class="choice ${order.design?.custom?"selected":""}" style="margin-top:18px" onclick="selectCustomDesign()">✨ Tengo otra idea</div>${order.design?.custom?`<textarea class="textarea" placeholder="Contanos tu idea: colores, tema, referencias, etc." onchange="setField('designNote', this.value)">${esc(order.designNote)}</textarea>`:""}`;
 }
 
 function selectDesign(d){ order.design=d; renderStep(); }
 function selectCustomDesign(){ order.design={custom:true,Nombre:"Diseño personalizado"}; renderStep(); }
 
 function fillingsHTML(){
-  return `<h2 class="step-title">Elegí los rellenos</h2><p class="hint">Seleccioná los sabores que te gustan. La cantidad de rellenos dependerá del tamaño y formato de la torta; nuestro equipo definirá la distribución adecuada.</p><div class="choice-grid">${active("RELLENOS").map(r=>`<div class="choice ${order.fillings.includes(r.Nombre)?"selected":""}" onclick='toggleFill(${j(r.Nombre)})'>${esc(r.Nombre)}</div>`).join("")}</div><div class="choice ${order.fillings.includes("CONSULTAR_OTRO")?"selected":""}" onclick='toggleFill("CONSULTAR_OTRO")'>➕ Consultar por otro relleno</div>${order.fillings.includes("CONSULTAR_OTRO")?`<textarea class="textarea" placeholder="Contanos qué relleno te gustaría consultar" onchange="order.fillingsExtra=this.value">${esc(order.fillingsExtra||"")}</textarea>`:""}`;
+  return `<h2 class="step-title">Elegí los rellenos</h2><p class="hint">Seleccioná los sabores que te gustan. La cantidad de rellenos dependerá del tamaño y formato de la torta; nuestro equipo definirá la distribución adecuada.</p><div class="choice-grid">${active("RELLENOS").map(r=>`<div class="choice ${order.fillings.includes(r.Nombre)?"selected":""}" onclick='toggleFill(${j(r.Nombre)})'>${esc(r.Nombre)}</div>`).join("")}</div><div class="choice ${order.fillings.includes("CONSULTAR_OTRO")?"selected":""}" onclick='toggleFill("CONSULTAR_OTRO")'>➕ Consultar por otro relleno</div>${order.fillings.includes("CONSULTAR_OTRO")?`<textarea class="textarea" placeholder="Contanos qué relleno te gustaría consultar" onchange="setField('fillingsExtra', this.value)">${esc(order.fillingsExtra||"")}</textarea>`:""}`;
 }
 
 function toggleFill(v){ const i=order.fillings.indexOf(v); i>=0?order.fillings.splice(i,1):order.fillings.push(v); renderStep(); }
@@ -234,19 +284,19 @@ function boxHTML(){
 }
 
 function customHTML(){
-  return `<h2 class="step-title">✨ Personalizá tu torta</h2><p class="hint">Contanos cualquier detalle que quieras agregar.</p><div class="muted">Por ejemplo:</div><ul><li>"Quiero que diga Martina"</li><li>"Me gustaría que sea rosa y blanco"</li><li>"Es para un cumpleaños de 15"</li><li>"Quiero mariposas doradas"</li><li>"Me gustaría agregar el número 18"</li><li>"Quiero algo parecido a una torta que vi en Instagram"</li></ul><textarea class="textarea" placeholder="Contanos qué tenés en mente..." onchange="order.custom=this.value">${esc(order.custom)}</textarea>`;
+  return `<h2 class="step-title">✨ Personalizá tu torta</h2><p class="hint">Contanos cualquier detalle que quieras agregar.</p><div class="muted">Por ejemplo:</div><ul><li>"Quiero que diga Martina"</li><li>"Me gustaría que sea rosa y blanco"</li><li>"Es para un cumpleaños de 15"</li><li>"Quiero mariposas doradas"</li><li>"Me gustaría agregar el número 18"</li><li>"Quiero algo parecido a una torta que vi en Instagram"</li></ul><textarea class="textarea" placeholder="Contanos qué tenés en mente..." onchange="setField('custom', this.value)">${esc(order.custom)}</textarea>`;
 }
 
 function detailsHTML(){
-  return `<h2 class="step-title">Datos del pedido</h2><label>Nombre</label><input class="input" value="${esc(order.name)}" onchange="order.name=this.value" placeholder="Tu nombre"><label>Fecha de retiro</label><input class="input" type="date" value="${esc(order.date)}" onchange="order.date=this.value"><label>Hora aproximada</label><input class="input" type="time" value="${esc(order.time)}" onchange="order.time=this.value"><label>¿Algo más que debamos saber?</label><textarea class="textarea" onchange="order.extra=this.value" placeholder="Opcional">${esc(order.extra||"")}</textarea>`;
+  return `<h2 class="step-title">Datos del pedido</h2><label>Nombre</label><input class="input" value="${esc(order.name)}" onchange="setField('name', this.value)" placeholder="Tu nombre"><label>Tu WhatsApp</label><input class="input" type="tel" value="${esc(order.clientPhone)}" onchange="setField('clientPhone', this.value)" placeholder="Ej: 1122334455"><label>Fecha de retiro</label><input class="input" type="date" value="${esc(order.date)}" onchange="setField('date', this.value)"><label>Hora aproximada</label><input class="input" type="time" value="${esc(order.time)}" onchange="setField('time', this.value)"><label>¿Algo más que debamos saber?</label><textarea class="textarea" onchange="setField('extra', this.value)" placeholder="Opcional">${esc(order.extra||"")}</textarea>`;
 }
 
 function sweetHTML(){
-  return `<h2 class="step-title">🍰 Mesa dulce</h2><p class="hint">Estos productos tienen precios fijos.</p><div class="products">${active("MESA_DULCE").map(p=>productHTML(p,true)).join("")}</div><label style="margin-top:18px;display:block">➕ ¿Buscás otra tarta o producto que no está en la lista?</label><textarea class="textarea" placeholder="Contanos qué te gustaría consultar" onchange="order.sweetExtra=this.value">${esc(order.sweetExtra||"")}</textarea>`;
+  return `<h2 class="step-title">🍰 Mesa dulce</h2><p class="hint">Estos productos tienen precios fijos.</p><div class="products">${active("MESA_DULCE").map(p=>productHTML(p,true)).join("")}</div><label style="margin-top:18px;display:block">➕ ¿Buscás otra tarta o producto que no está en la lista?</label><textarea class="textarea" placeholder="Contanos qué te gustaría consultar" onchange="setField('sweetExtra', this.value)">${esc(order.sweetExtra||"")}</textarea>`;
 }
 
 function saltyHTML(){
-  return `<h2 class="step-title">🥪 Mesa salada</h2><p class="hint">Los productos de mesa salada se cotizan según el pedido.</p><div class="products">${active("MESA_SALADA").map(p=>productHTML(p,false)).join("")}</div><label style="margin-top:18px;display:block">➕ ¿Buscás otra opción que no está en la lista?</label><textarea class="textarea" placeholder="Contanos qué te gustaría consultar" onchange="order.saltyExtra=this.value">${esc(order.saltyExtra||"")}</textarea>`;
+  return `<h2 class="step-title">🥪 Mesa salada</h2><p class="hint">Los productos de mesa salada se cotizan según el pedido.</p><div class="products">${active("MESA_SALADA").map(p=>productHTML(p,false)).join("")}</div><label style="margin-top:18px;display:block">➕ ¿Buscás otra opción que no está en la lista?</label><textarea class="textarea" placeholder="Contanos qué te gustaría consultar" onchange="setField('saltyExtra', this.value)">${esc(order.saltyExtra||"")}</textarea>`;
 }
 
 function productHTML(p, price){
@@ -266,7 +316,7 @@ function changeProduct(p, isSweet, d){
 
 function summaryHTML(){
   const sweetTotal = order.sweet.reduce((a,x)=>a+(+x.Precio||0)*x.qty,0);
-  return `<h2 class="step-title">Tu pedido</h2><div class="summary"><h3>🎂 Torta</h3><div class="summary-row"><span>Tamaño</span><b>${order.mode=="people"?order.people+" personas (≈ "+Math.round(order.people/10)+" kg)":order.kg+" kg (≈ "+order.kg*10+" personas)"}</b></div><div class="summary-row"><span>Diseño</span><b>${esc(order.design?.Hashtag||order.design?.Nombre||"Personalizado")}</b></div>${order.designNote?`<p><b>Idea de diseño:</b> ${esc(order.designNote)}</p>`:""}<div class="summary-row"><span>Rellenos</span><b>${order.fillings.map(x=>x=="CONSULTAR_OTRO"?"Consultar otro relleno":x).join(", ")}</b></div>${order.fillingsExtra?`<p><b>Consulta de relleno:</b> ${esc(order.fillingsExtra)}</p>`:""}<div class="summary-row"><span>Cobertura</span><b>Crema</b></div><div class="summary-row"><span>Caja</span><b>${order.box?"Sí":"No"}</b></div>${order.custom?`<h3>✨ Personalización</h3><p>${esc(order.custom)}</p>`:""}<h3>📅 Retiro</h3><p>${esc(order.name)} — ${esc(order.date)} — ${esc(order.time)} aprox.</p>${order.extra?`<p>${esc(order.extra)}</p>`:""}<h3>🍰 Mesa dulce</h3>${order.sweet.length?order.sweet.map(x=>`<div class="summary-row"><span>${x.qty} × ${esc(x.Producto)}</span><b>$ ${money((+x.Precio||0)*x.qty)}</b></div>`).join(""):"<p class='muted'>Sin mesa dulce</p>"}<div class="summary-row"><span><b>Subtotal mesa dulce</b></span><b>$ ${money(sweetTotal)}</b></div>${order.sweetExtra?`<p><b>Consulta:</b> ${esc(order.sweetExtra)}</p>`:""}<h3>🥪 Mesa salada</h3>${order.salty.length?order.salty.map(x=>`<div class="summary-row"><span>${x.qty} × ${esc(x.Producto)}</span><b>A cotizar</b></div>`).join(""):"<p class='muted'>Sin mesa salada</p>"}${order.saltyExtra?`<p><b>Consulta:</b> ${esc(order.saltyExtra)}</p>`:""}<p class="muted">Las tortas y opciones saladas requieren cotización. El pedido será revisado por nuestro equipo.</p></div>`;
+  return `<h2 class="step-title">Tu pedido</h2><div class="summary"><h3>🎂 Torta</h3><div class="summary-row"><span>Tamaño</span><b>${order.mode=="people"?order.people+" personas (≈ "+Math.round(order.people/10)+" kg)":order.kg+" kg (≈ "+order.kg*10+" personas)"}</b></div><div class="summary-row"><span>Diseño</span><b>${esc(order.design?.Hashtag||order.design?.Nombre||"Personalizado")}</b></div>${order.designNote?`<p><b>Idea de diseño:</b> ${esc(order.designNote)}</p>`:""}<div class="summary-row"><span>Rellenos</span><b>${order.fillings.map(x=>x=="CONSULTAR_OTRO"?"Consultar otro relleno":x).join(", ")}</b></div>${order.fillingsExtra?`<p><b>Consulta de relleno:</b> ${esc(order.fillingsExtra)}</p>`:""}<div class="summary-row"><span>Cobertura</span><b>Crema</b></div><div class="summary-row"><span>Caja</span><b>${order.box?"Sí":"No"}</b></div>${order.custom?`<h3>✨ Personalización</h3><p>${esc(order.custom)}</p>`:""}<h3>📅 Retiro</h3><p>${esc(order.name)} — ${esc(order.clientPhone)} — ${esc(order.date)} — ${esc(order.time)} aprox.</p>${order.extra?`<p>${esc(order.extra)}</p>`:""}<h3>🍰 Mesa dulce</h3>${order.sweet.length?order.sweet.map(x=>`<div class="summary-row"><span>${x.qty} × ${esc(x.Producto)}</span><b>$ ${money((+x.Precio||0)*x.qty)}</b></div>`).join(""):"<p class='muted'>Sin mesa dulce</p>"}<div class="summary-row"><span><b>Subtotal mesa dulce</b></span><b>$ ${money(sweetTotal)}</b></div>${order.sweetExtra?`<p><b>Consulta:</b> ${esc(order.sweetExtra)}</p>`:""}<h3>🥪 Mesa salada</h3>${order.salty.length?order.salty.map(x=>`<div class="summary-row"><span>${x.qty} × ${esc(x.Producto)}</span><b>A cotizar</b></div>`).join(""):"<p class='muted'>Sin mesa salada</p>"}${order.saltyExtra?`<p><b>Consulta:</b> ${esc(order.saltyExtra)}</p>`:""}<p class="muted">Las tortas y opciones saladas requieren cotización. El pedido será revisado por nuestro equipo.</p></div>`;
 }
 
 function sendWhatsApp(){
@@ -305,7 +355,28 @@ function sendWhatsApp(){
     "Quedo a la espera del presupuesto final. ¡Gracias!"
   ];
   const msg = lines.join("\n");
+  enviarAAdmin(msg);
+  clearProgress();
   window.open(`https://wa.me/${wa.replace(/\D/g,"")}?text=${encodeURIComponent(msg)}`, "_blank");
+}
+
+function enviarAAdmin(resumen){
+  if(!PEDIDOS_WEBHOOK_URL) return; // todavía no configuraste el webhook, no pasa nada
+  try{
+    fetch(PEDIDOS_WEBHOOK_URL, {
+      method: "POST",
+      mode: "no-cors",
+      body: JSON.stringify({
+        cliente: order.name,
+        clientePhone: order.clientPhone,
+        fechaRetiro: order.date,
+        horaRetiro: order.time,
+        resumen
+      })
+    });
+  }catch(e){
+    console.warn("[configurador] No se pudo guardar copia en la planilla admin:", e);
+  }
 }
 
 function configMsg(){
