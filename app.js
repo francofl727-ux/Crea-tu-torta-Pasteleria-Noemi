@@ -267,7 +267,7 @@ function sizeHTML(){
 function chooseMode(m){ order.mode=m; order.people=null; order.kg=null; renderStep(); }
 
 function designHTML(){
-  return `<h2 class="step-title">¿Qué diseño estás buscando?</h2><p class="hint">Podés elegir una torta de referencia o contarnos una idea propia.</p><div class="products">${active("DISEÑOS").map(d=>`<div class="product ${order.design?.ID==d.ID?"selected":""}" onclick='selectDesign(${j(d)})'>${d.Imagen_URL?`<img src="${esc(d.Imagen_URL)}">`:""}<b>${esc(d.Nombre)}</b><div class="tag">${esc(d.Hashtag||"")}</div></div>`).join("")}</div><div class="choice ${order.design?.custom?"selected":""}" style="margin-top:18px" onclick="selectCustomDesign()">✨ Tengo otra idea</div>${order.design?.custom?`<textarea class="textarea" placeholder="Contanos tu idea: colores, tema, referencias, etc." onchange="setField('designNote', this.value)">${esc(order.designNote)}</textarea>`:""}`;
+  return `<h2 class="step-title">¿Qué diseño estás buscando?</h2><p class="hint">Podés elegir una torta de referencia o contarnos una idea propia.</p><div class="products">${active("DISEÑOS").map(d=>`<div class="product ${order.design?.ID==d.ID?"selected":""}" onclick='selectDesign(${j(d)})'>${d.Imagen_URL?`<img src="${esc(d.Imagen_URL)}">`:""}<b>${esc(d.Nombre)}</b><div class="tag">${esc(d.Hashtag||"")}</div></div>`).join("")}</div><div class="choice ${order.design?.custom?"selected":""}" style="margin-top:18px" onclick="selectCustomDesign()">✨ Tengo otra idea</div>${order.design?.custom?`<textarea class="textarea" placeholder="Contanos tu idea: colores, tema, referencias, etc." onchange="setField('designNote', this.value)">${esc(order.designNote)}</textarea><p class="muted">📷 Si tenés una foto de referencia, mandala directo por este mismo chat de WhatsApp apenas se abra.</p>`:""}`;
 }
 
 function selectDesign(d){ order.design=d; renderStep(); }
@@ -323,6 +323,7 @@ function sendWhatsApp(){
   const c = objects("CONFIGURACION");
   const wa = (c.find(x => x.Campo === "WhatsApp") || {}).Valor || "";
   if(!wa || wa.toUpperCase().includes("X")) return toast("Configurá el número de WhatsApp en Google Sheets.");
+
   const sweetTotal = order.sweet.reduce((a,x)=>a+(+x.Precio||0)*x.qty,0);
   const lines = [
     "Hola! 👋 Quiero solicitar un presupuesto.",
@@ -331,6 +332,7 @@ function sendWhatsApp(){
     `• Tamaño: ${order.mode=="people"?order.people+" personas (≈ "+Math.round(order.people/10)+" kg)":order.kg+" kg (≈ "+order.kg*10+" personas)"}`,
     `• Diseño: ${order.design?.Hashtag||order.design?.Nombre||"Personalizado"}`,
     ...(order.designNote ? [`• Idea de diseño: ${order.designNote}`] : []),
+    ...(order.design?.custom ? [`• (Te mando una foto de referencia a continuación en este mismo chat)`] : []),
     `• Rellenos: ${order.fillings.map(x=>x=="CONSULTAR_OTRO"?"Consultar otro":x).join(", ")}`,
     ...(order.fillingsExtra ? [`• Consulta de relleno: ${order.fillingsExtra}`] : []),
     "• Cobertura: Crema",
