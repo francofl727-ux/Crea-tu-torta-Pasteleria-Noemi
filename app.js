@@ -11,7 +11,7 @@ const SHEET_ID = "1iQirAqmJzyW4_lKcElqDCv3F-uPx_peCIIHxyNOnK_M";
 // URL de tu Apps Script publicado como Aplicación web (termina en /exec).
 // Dejalo vacío ("") si todavía no lo configuraste: la página sigue funcionando igual,
 // simplemente no va a guardar copia del pedido en tu planilla admin.
-const PEDIDOS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbw86S6tnVVT5KW_BkoPqUl5-4XAmBNCzaHaeMeqbEPxNszwbMr__b-BeDOHIyzpqOH4_Q/exec";
+const PEDIDOS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbz90jHrC1_Au_1wm-OrsZ3hSJacdsSSsilc56NZRPls8UsFK_RII0ZIZtjp9PdPSNs8Kg/exec";
 const STORAGE_KEY = "configuradorTortaOrder_v1";
 
 const FALLBACK_DATA = {
