@@ -39,6 +39,12 @@
 </main>
 
 <div id="toast" class="toast"></div>
+<div id="lightbox" class="lightbox hidden" onclick="closeLightboxIfBackground(event)">
+  <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+  <div id="lightboxTrack" class="lightbox-track"></div>
+  <div id="lightboxCounter" class="lightbox-counter"></div>
+</div>
+
 <script src="app.js"></script>
 </body>
 </html>
