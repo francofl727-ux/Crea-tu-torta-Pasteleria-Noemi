@@ -198,16 +198,47 @@ function applyConfig(){
   }
 }
 
+function designPhotos(d){
+  return [d.Imagen_URL, d.Imagen_URL_2, d.Imagen_URL_3, d.Imagen_URL_4, d.Imagen_URL_5]
+    .map(x => (x || "").trim())
+    .filter(Boolean);
+}
+
 function renderGallery(){
   const g = document.getElementById("gallery");
   g.innerHTML = "";
   active("DISEÑOS").forEach(d => {
+    const photos = designPhotos(d);
     const el = document.createElement("div");
     el.className = "card";
-    el.innerHTML = `${d.Imagen_URL ? `<img src="${esc(d.Imagen_URL)}" alt="">` : `<div style="aspect-ratio:1;background:#eee5e2"></div>`}<div class="card-body"><strong>${esc(d.Nombre)}</strong><div class="tag">${esc(d.Hashtag||"")}</div></div>`;
+    el.innerHTML = `${photos[0] ? `<div class="card-img-wrap"><img src="${esc(photos[0])}" alt="">${photos.length>1?`<button class="zoom-btn" type="button">🔍 ${photos.length}</button>`:""}</div>` : `<div style="aspect-ratio:1;background:#eee5e2"></div>`}<div class="card-body"><strong>${esc(d.Nombre)}</strong><div class="tag">${esc(d.Hashtag||"")}</div></div>`;
     el.onclick = () => { start(); order.design = d; renderStep(); };
+    const zoomBtn = el.querySelector(".zoom-btn");
+    if(zoomBtn) zoomBtn.onclick = (ev) => { ev.stopPropagation(); openLightbox(photos); };
     g.appendChild(el);
   });
+}
+
+function openLightbox(photos){
+  if(!photos || !photos.length) return;
+  const track = document.getElementById("lightboxTrack");
+  track.innerHTML = photos.map(p => `<img src="${esc(p)}">`).join("");
+  document.getElementById("lightboxCounter").textContent = `1 / ${photos.length}`;
+  document.getElementById("lightbox").classList.remove("hidden");
+  track.scrollLeft = 0;
+  track.onscroll = () => {
+    const idx = Math.round(track.scrollLeft / track.clientWidth) + 1;
+    document.getElementById("lightboxCounter").textContent = `${idx} / ${photos.length}`;
+  };
+}
+
+function closeLightbox(){
+  document.getElementById("lightbox").classList.add("hidden");
+  document.getElementById("lightboxTrack").innerHTML = "";
+}
+
+function closeLightboxIfBackground(ev){
+  if(ev.target.id === "lightbox") closeLightbox();
 }
 
 function start(){
@@ -267,7 +298,10 @@ function sizeHTML(){
 function chooseMode(m){ order.mode=m; order.people=null; order.kg=null; renderStep(); }
 
 function designHTML(){
-  return `<h2 class="step-title">¿Qué diseño estás buscando?</h2><p class="hint">Podés elegir una torta de referencia o contarnos una idea propia.</p><div class="products">${active("DISEÑOS").map(d=>`<div class="product ${order.design?.ID==d.ID?"selected":""}" onclick='selectDesign(${j(d)})'>${d.Imagen_URL?`<img src="${esc(d.Imagen_URL)}">`:""}<b>${esc(d.Nombre)}</b><div class="tag">${esc(d.Hashtag||"")}</div></div>`).join("")}</div><div class="choice ${order.design?.custom?"selected":""}" style="margin-top:18px" onclick="selectCustomDesign()">✨ Tengo otra idea</div>${order.design?.custom?`<textarea class="textarea" placeholder="Contanos tu idea: colores, tema, referencias, etc." onchange="setField('designNote', this.value)">${esc(order.designNote)}</textarea><p class="muted">📷 Si tenés una foto de referencia, mandala directo por este mismo chat de WhatsApp apenas se abra.</p>`:""}`;
+  return `<h2 class="step-title">¿Qué diseño estás buscando?</h2><p class="hint">Podés elegir una torta de referencia o contarnos una idea propia.</p><div class="products">${active("DISEÑOS").map(d=>{
+    const photos = designPhotos(d);
+    return `<div class="product ${order.design?.ID==d.ID?"selected":""}" onclick='selectDesign(${j(d)})'>${photos[0]?`<div class="card-img-wrap"><img src="${esc(photos[0])}">${photos.length>1?`<button class="zoom-btn" type="button" onclick='event.stopPropagation();openLightbox(${j(photos)})'>🔍 ${photos.length}</button>`:""}</div>`:""}<b>${esc(d.Nombre)}</b><div class="tag">${esc(d.Hashtag||"")}</div></div>`;
+  }).join("")}</div><div class="choice ${order.design?.custom?"selected":""}" style="margin-top:18px" onclick="selectCustomDesign()">✨ Tengo otra idea</div>${order.design?.custom?`<textarea class="textarea" placeholder="Contanos tu idea: colores, tema, referencias, etc." onchange="setField('designNote', this.value)">${esc(order.designNote)}</textarea><p class="muted">📷 Si tenés una foto de referencia, mandala directo por este mismo chat de WhatsApp apenas se abra.</p>`:""}`;
 }
 
 function selectDesign(d){ order.design=d; renderStep(); }
